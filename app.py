@@ -29,7 +29,7 @@ reviews_input = st.text_area(
 
 if st.button("Analyze", type="primary"):
     if not reviews_input.strip():
-        st.warning("Paste a review first.")
+        st.warning("Please paste a review to use BRIT.")
     else:
         with st.spinner("Analyzing..."):
             response = ask_claude(
