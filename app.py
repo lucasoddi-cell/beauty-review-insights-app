@@ -20,8 +20,6 @@ st.title("Welcome to BRIT - Beauty Review Insights Tool")
 st.caption("Paste in Customer Reviews and Receive a Structured Analysis.")
 st.caption("Built by Lukipuki · Week 2 of AI fluency plan")
 
-review_input = st.text_area("Paste one review", height=150)
-
 # Input widget — returns whatever the user typed as a string
 reviews_input = st.text_area(
     "Paste customer reviews here:",
@@ -30,7 +28,7 @@ reviews_input = st.text_area(
 )
 
 if st.button("Analyze", type="primary"):
-    if not review_input.strip():
+    if not reviews_input.strip():
         st.warning("Paste a review first.")
     else:
         with st.spinner("Analyzing..."):
