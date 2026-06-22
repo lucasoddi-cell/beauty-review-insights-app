@@ -42,7 +42,7 @@ if st.button("Analyze", type="primary"):
         st.caption("BRIT Analysis:")
         st.write(response)
 
-)
+
 
 
 
