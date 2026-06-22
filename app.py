@@ -33,7 +33,7 @@ if st.button("Analyze", type="primary"):
     else:
         with st.spinner("Analyzing..."):
             response = ask_claude(
-                prompt=f"You are a senior consumer insights analyst. Extract structured insight from customer reviews. Be specific. Quote verbatim where You are a senior consumer insights analyst at a prestige beauty company. Extract structured insight from customer reviews. Be specific. Quote verbatim where the schema asks for it..:\n\n{review_input}",
+                prompt=f"You are a senior consumer insights analyst. Extract structured insight from customer reviews. Be specific. Quote verbatim where You are a senior consumer insights analyst at a prestige beauty company. Extract structured insight from customer reviews. Be specific. Quote verbatim where the schema asks for it..:\n\n{reviews_input}",
                 system="You are a senior consumer insights analyst."
             )
         st.success("Reviews successfully inputted.")
