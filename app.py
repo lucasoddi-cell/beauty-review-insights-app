@@ -1,6 +1,6 @@
 import streamlit as st
 
-st.title("Welcome to BRIT - Beauty Review Insight Tool")
+st.title("Welcome to BRIT - Beauty Review Insights Tool")
 st.caption("Paste in Customer Reviews and Receive a Structured Analysis")
 st.caption("Built by Lukipuki · Week 2 of AI fluency plan")
 
