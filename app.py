@@ -1,5 +1,7 @@
 import streamlit as st
 from anthropic import Anthropic 
+from pydantic import BaseModel, Field
+from typing import Literal
 
 client = Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
 
@@ -84,7 +86,7 @@ def analyze_review(reviews_text):
         max_tokens=1500,
         system="You are a senior consumer insights analyst at a prestige beauty company. Extract structured insight from customer reviews. Be specific. Quote verbatim where the schema asks for it.",
         messages=[
-            {"role": "user", "content": f"Analyze this beauty product review:\n\n{review_text}"}
+            {"role": "user", "content": f"Analyze this beauty product review:\n\n{reviews_text}"}
         ],
         output_format=FullReviewAnalysis
     )
@@ -97,7 +99,8 @@ if st.button("Analyze", type="primary"):
     else:
         with st.spinner("Analyzing..."):
             result = analyze_review(reviews_input)
-        st.success("Analysis Completed.")
+        st.success("Analysis Successfully Completed.")
+        st.caption("BRIT Analysis:")
         
         # === The headline metrics ===
         st.subheader("At a glance")
@@ -131,9 +134,6 @@ if st.button("Analyze", type="primary"):
         with st.expander("See full structured output"):
             st.json(result.model_dump())
             
-        st.success("Reviews successfully inputted.")
-        st.caption("BRIT Analysis:")
-        st.write(response)
 
 
 
