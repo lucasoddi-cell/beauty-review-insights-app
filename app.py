@@ -134,24 +134,26 @@ if st.button("Analyze", type="primary"):
         # === The full debug view (collapsed by default) ===
         with st.expander("See full structured output"):
             st.json(result.model_dump())
-# Take your URL and append .json (no trailing slash)
-thread_url = "https://www.reddit.com/r/MakeupAddiction/comments/1rrpr5p/some_makeup_reviews/.json"
+# Reddit URL
+thread_url = "https://www.reddit.com/r/Sephora/comments/1jqm01f/unpopular_opiniontarte_shape_tape_sucks/.json"
 
 headers = {
-    "User-Agent": "BRIT-ReviewInsights/0.1 by lukipuki"
+    "User-Agent": "BRIT-ReviewInsights/0.1"
 }
 
-response = requests.get(thread_url, headers=headers)
+comments = []
 
-st.write(f"Status code: {response.status_code}")
-st.write(f"Content type: {response.headers.get('content-type')}")
+try:
+    response = requests.get(thread_url, headers=headers, timeout=10)
 
-if response.status_code != 200:
-    st.error("Reddit did not return a successful response.")
-    st.write(response.text[:500])
+    st.write(f"Status code: {response.status_code}")
+    st.write(f"Content type: {response.headers.get('content-type')}")
 
-else:
-    try:
+    if response.status_code != 200:
+        st.error("Reddit did not return a successful response.")
+        st.write(response.text[:500])
+
+    else:
         data = response.json()
 
         comments_data = data[1]["data"]["children"]
@@ -170,10 +172,12 @@ else:
             st.subheader(f"Comment {i}")
             st.write(c[:300])
 
-    except requests.exceptions.JSONDecodeError:
-        st.error("Reddit returned something, but it was not valid JSON.")
-        st.write(response.text[:500])
+except requests.exceptions.JSONDecodeError:
+    st.error("Reddit responded, but it was not valid JSON.")
 
+except requests.exceptions.RequestException as e:
+    st.error("The Reddit request failed.")
+    st.write(str(e))
 # Peek at the first few
 for i, c in enumerate(comments[:3], 1):
     print(f"--- Comment {i} ({len(c)} chars) ---")
