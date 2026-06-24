@@ -138,7 +138,7 @@ if st.button("Analyze", type="primary"):
 thread_url = "https://www.reddit.com/r/Sephora/comments/1jqm01f/unpopular_opiniontarte_shape_tape_sucks/.json"
 
 headers = {
-    "User-Agent": "BRIT-ReviewInsights/0.1"
+    "User-Agent": "web:com.brit.reviews:v0.1 (by /u/LOInsights)"
 }
 
 comments = []
