@@ -134,37 +134,45 @@ if st.button("Analyze", type="primary"):
         # === The full debug view (collapsed by default) ===
         with st.expander("See full structured output"):
             st.json(result.model_dump())
-
 # Take your URL and append .json (no trailing slash)
 thread_url = "https://www.reddit.com/r/MakeupAddiction/comments/1rrpr5p/some_makeup_reviews/.json"
-headers = {"User-Agent": "BRIT-ReviewInsights/0.1 by [your reddit username]"}
 
-# Take your URL and append .json (no trailing slash)
-thread_url = "https://www.reddit.com/r/MakeupAddiction/comments/1rrpr5p/some_makeup_reviews/.json"
-headers = {"User-Agent": "BRIT-ReviewInsights/0.1 by [your reddit username]"}
+headers = {
+    "User-Agent": "BRIT-ReviewInsights/0.1 by lukipuki"
+}
 
 response = requests.get(thread_url, headers=headers)
-print(f"Status: {response.status_code}")  # Want 200
 
-data = response.json()
-print(f"Top-level structure: list of {len(data)} items")
-# data[0] is the post, data[1] is the comments
+st.write(f"Status code: {response.status_code}")
+st.write(f"Content type: {response.headers.get('content-type')}")
 
-# Walk into the comments
-comments_data = data[1]['data']['children']
-print(f"Found {len(comments_data)} comment entries")
+if response.status_code != 200:
+    st.error("Reddit did not return a successful response.")
+    st.write(response.text[:500])
 
-# Each entry has 'kind' and 'data'. 'kind' = 't1' means it's a comment.
-# Extract just the body text from real comments, skip deleted/removed ones.
-comments = [
-    c['data']['body']
-    for c in comments_data
-    if c['kind'] == 't1'
-    and c['data'].get('body')
-    and c['data']['body'] not in ['[deleted]', '[removed]']
-]
+else:
+    try:
+        data = response.json()
 
-print(f"\nGot {len(comments)} usable comments\n")
+        comments_data = data[1]["data"]["children"]
+
+        comments = [
+            c["data"]["body"]
+            for c in comments_data
+            if c["kind"] == "t1"
+            and c["data"].get("body")
+            and c["data"]["body"] not in ["[deleted]", "[removed]"]
+        ]
+
+        st.success(f"Got {len(comments)} usable comments.")
+
+        for i, c in enumerate(comments[:3], 1):
+            st.subheader(f"Comment {i}")
+            st.write(c[:300])
+
+    except requests.exceptions.JSONDecodeError:
+        st.error("Reddit returned something, but it was not valid JSON.")
+        st.write(response.text[:500])
 
 # Peek at the first few
 for i, c in enumerate(comments[:3], 1):
