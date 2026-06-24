@@ -2,6 +2,7 @@ import streamlit as st
 from anthropic import Anthropic 
 from pydantic import BaseModel, Field
 from typing import Literal
+import requests
 
 client = Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
 
@@ -133,7 +134,43 @@ if st.button("Analyze", type="primary"):
         # === The full debug view (collapsed by default) ===
         with st.expander("See full structured output"):
             st.json(result.model_dump())
-            
+
+# Take your URL and append .json (no trailing slash)
+thread_url = "https://www.reddit.com/r/MakeupAddiction/comments/1rrpr5p/some_makeup_reviews/.json"
+headers = {"User-Agent": "BRIT-ReviewInsights/0.1 by [your reddit username]"}
+
+# Take your URL and append .json (no trailing slash)
+thread_url = "https://www.reddit.com/r/MakeupAddiction/comments/1rrpr5p/some_makeup_reviews/.json"
+headers = {"User-Agent": "BRIT-ReviewInsights/0.1 by [your reddit username]"}
+
+response = requests.get(thread_url, headers=headers)
+print(f"Status: {response.status_code}")  # Want 200
+
+data = response.json()
+print(f"Top-level structure: list of {len(data)} items")
+# data[0] is the post, data[1] is the comments
+
+# Walk into the comments
+comments_data = data[1]['data']['children']
+print(f"Found {len(comments_data)} comment entries")
+
+# Each entry has 'kind' and 'data'. 'kind' = 't1' means it's a comment.
+# Extract just the body text from real comments, skip deleted/removed ones.
+comments = [
+    c['data']['body']
+    for c in comments_data
+    if c['kind'] == 't1'
+    and c['data'].get('body')
+    and c['data']['body'] not in ['[deleted]', '[removed]']
+]
+
+print(f"\nGot {len(comments)} usable comments\n")
+
+# Peek at the first few
+for i, c in enumerate(comments[:3], 1):
+    print(f"--- Comment {i} ({len(c)} chars) ---")
+    print(c[:300])
+    print()
 
 
 
