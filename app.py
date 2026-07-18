@@ -20,15 +20,9 @@ def ask_claude(prompt, system="You are a helpful assistant."):
 
 #UI
 st.title("Welcome to BRIT - Beauty Review Insights Tool")
-st.caption("Paste in Customer Reviews and Receive a Structured Analysis.")
+st.caption("Structured analysis of beauty product reviews from any source.")
 st.caption("Built by Lukipuki · Week 2 of AI fluency plan")
 
-# Input widget — returns whatever the user typed as a string
-reviews_input = st.text_area(
-    "Paste customer reviews here:",
-    height=200,
-    placeholder="One review per line, or separate with ---REVIEW---"
-)
 #Pydantic Class
 class FullReviewAnalysis(BaseModel):
     """Structured analysis of a single beauty product review."""
@@ -93,7 +87,44 @@ def analyze_review(reviews_text):
     )
     return response.parsed_output
 
-#testanalysis
+# Bazaarvoice fetcher — used by Tab 2
+def get_bazaarvoice_reviews(product_id: str, limit: int = 20) -> list[str]:
+    """Fetch reviews from Sephora's Bazaarvoice endpoint.
+
+    Args:
+        product_id: The Sephora product ID (e.g. "P443563").
+        limit: Maximum number of reviews to return. Default 20.
+
+    Returns:
+        A list of review body text strings. Empty list on any failure.
+    """
+    base_url = "https://api.bazaarvoice.com/data/reviews.json"
+    params = {
+        "apiversion": "5.5",
+        "passkey": "YOUR_PASSKEY_HERE",  # <-- paste your passkey from the DevTools URL
+        "Filter": f"ProductId:{product_id}",
+        "Sort": "SubmissionTime:desc",
+        "Limit": limit,
+        "Offset": 0,
+    }
+    try:
+        response = requests.get(base_url, params=params, timeout=10)
+        if response.status_code != 200:
+            print(f"Bazaarvoice returned {response.status_code}")
+            return []
+        data = response.json()
+    except Exception as e:
+        print(f"Bazaarvoice request failed: {e}")
+        return []
+
+    reviews = [
+        r["ReviewText"]
+        for r in data.get("Results", [])
+        if r.get("ReviewText")
+    ]
+    return reviews
+
+# Display helper — used by both tabs
 def display_analysis(result):
     """Render one FullReviewAnalysis result as metrics + quotable + pain/delight."""
     col1, col2, col3 = st.columns(3)
@@ -119,14 +150,14 @@ def display_analysis(result):
                 st.write(f"- {d}")
         else:
             st.caption("None mentioned.")
-            
+
 tab1, tab2, tab3 = st.tabs([
     "Paste Reviews",
     "Bazaarvoice",
     "Reddit",
 ])
 
-#Execution Function
+# ===== Tab 1: paste flow =====
 with tab1:
     reviews_input = st.text_area(
         "Paste customer reviews here:",
@@ -144,7 +175,7 @@ with tab1:
             st.success("Analysis Successfully Completed.")
             display_analysis(result)
 
-
+# ===== Tab 2: Bazaarvoice (Sephora) flow =====
 with tab2:
     st.caption("Find the Product ID in the Sephora URL — e.g. P443563 from Glowy Lip Balm")
     
@@ -188,8 +219,8 @@ with tab2:
                 
                 st.success(f"Done — analyzed {len(reviews)} reviews.")
 
-
-
+# ===== Tab 3: Reddit (pending approval) =====
 with tab3:
     st.caption("Reddit Analysis:")
-    st.info("Reddit integration awaits Reddit API approval.")
+    st.info("Reddit integration awaits Reddit API approval.")       
+ 
