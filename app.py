@@ -93,6 +93,33 @@ def analyze_review(reviews_text):
     )
     return response.parsed_output
 
+#testanalysis
+def display_analysis(result):
+    """Render one FullReviewAnalysis result as metrics + quotable + pain/delight."""
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Inferred rating", f"{result.star_rating_inferred}/5")
+    col2.metric("Sentiment", result.sentiment)
+    col3.metric("Would repurchase?", result.would_repurchase)
+    
+    if result.most_quotable_line:
+        st.write(f'> "{result.most_quotable_line}"')
+    
+    col_left, col_right = st.columns(2)
+    with col_left:
+        st.caption("Pain points")
+        if result.pain_points:
+            for p in result.pain_points:
+                st.write(f"- {p}")
+        else:
+            st.caption("None mentioned.")
+    with col_right:
+        st.caption("Delight points")
+        if result.delight_points:
+            for d in result.delight_points:
+                st.write(f"- {d}")
+        else:
+            st.caption("None mentioned.")
+            
 tab1, tab2, tab3 = st.tabs([
     "Paste Reviews",
     "Bazaarvoice",
@@ -101,50 +128,67 @@ tab1, tab2, tab3 = st.tabs([
 
 #Execution Function
 with tab1:
-    if st.button("Analyze", type="primary"):
+    reviews_input = st.text_area(
+        "Paste customer reviews here:",
+        height=200,
+        placeholder="One review per line, or separate with ---REVIEW---",
+        key="paste_input"
+    )
+    
+    if st.button("Analyze", type="primary", key="paste_analyze"):
         if not reviews_input.strip():
             st.warning("Please paste a review to use BRIT.")
         else:
             with st.spinner("Analyzing..."):
                 result = analyze_review(reviews_input)
             st.success("Analysis Successfully Completed.")
-            st.caption("BRIT Analysis:")
-            
-            # === The headline metrics ===
-            st.subheader("At a glance")
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Inferred rating", f"{result.star_rating_inferred}/5")
-            col2.metric("Sentiment", result.sentiment)
-            col3.metric("Would repurchase?", result.would_repurchase)
-            
-            # === The quotable line (its own moment) ===
-            st.subheader("Most quotable line")
-            st.write(f'> "{result.most_quotable_line}"')
-            
-            # === Pain points and delight points side by side ===
-            col_left, col_right = st.columns(2)
-            with col_left:
-                st.subheader("Pain points")
-                if result.pain_points:
-                    for p in result.pain_points:
-                        st.write(f"- {p}")
-                else:
-                    st.caption("None mentioned.")
-            with col_right:
-                st.subheader("Delight points")
-                if result.delight_points:
-                    for d in result.delight_points:
-                        st.write(f"- {d}")
-                else:
-                    st.caption("None mentioned.")
-            
-            # === The full debug view (collapsed by default) ===
-            with st.expander("See full structured output"):
-                st.json(result.model_dump())
+            display_analysis(result)
 
 
 with tab2:
-     st.caption("Bazaarvoice Analysis:")
+    st.caption("Find the Product ID in the Sephora URL — e.g. P443563 from Glowy Lip Balm")
+    
+    product_id = st.text_input(
+        "Product ID",
+        placeholder="P443563",
+        key="sephora_product_id"
+    )
+    
+    n = st.number_input(
+        "How many reviews to analyze",
+        min_value=1,
+        max_value=30,
+        value=15,
+        key="sephora_limit"
+    )
+    
+    if st.button("Fetch & Analyze", type="primary", key="sephora_analyze"):
+        if not product_id.strip():
+            st.warning("Please enter a Sephora Product ID.")
+        else:
+            with st.spinner(f"Fetching {n} reviews from Bazaarvoice..."):
+                reviews = get_bazaarvoice_reviews(product_id.strip(), limit=n)
+            
+            if not reviews:
+                st.error("No reviews returned. Check the Product ID and try again.")
+            else:
+                st.success(f"Got {len(reviews)} reviews. Analyzing...")
+                progress = st.progress(0)
+                
+                for i, review in enumerate(reviews, 1):
+                    try:
+                        result = analyze_review(review)
+                        header = f"Review {i} — {result.sentiment} ({result.star_rating_inferred}/5)"
+                        with st.expander(header):
+                            st.caption(review[:250] + "..." if len(review) > 250 else review)
+                            display_analysis(result)
+                    except Exception as e:
+                        st.error(f"Review {i} failed: {e}")
+                    progress.progress(i / len(reviews))
+                
+                st.success(f"Done — analyzed {len(reviews)} reviews.")
+
+
 
 with tab3:
     st.caption("Reddit Analysis:")
