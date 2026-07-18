@@ -147,5 +147,5 @@ with tab2:
      st.caption("Bazaarvoice Analysis:")
 
 with tab3:
-     st.caption("Reddit Analysis:")
+    st.caption("Reddit Analysis:")
     st.info("Reddit integration awaits Reddit API approval.")
