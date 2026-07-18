@@ -88,7 +88,7 @@ def analyze_review(reviews_text):
     return response.parsed_output
 
 # Bazaarvoice fetcher — used by Tab 2
-def get_bazaarvoice_reviews(product_id: str, limit: int = 20) -> list[str]:
+def get_bazaarvoice_reviews(product_id: str, limit: int = 100) -> list[str]:
     """Fetch reviews from Sephora's Bazaarvoice endpoint.
 
     Args:
@@ -101,7 +101,7 @@ def get_bazaarvoice_reviews(product_id: str, limit: int = 20) -> list[str]:
     base_url = "https://api.bazaarvoice.com/data/reviews.json"
     params = {
         "apiversion": "5.5",
-        "passkey": "YOUR_PASSKEY_HERE",  # <-- paste your passkey from the DevTools URL
+        "passkey": "calXm2DyQVjcCy9agq85vmTJv5ELuuBCF2sdg4BnJzJus",  # <-- paste your passkey from the DevTools URL
         "Filter": f"ProductId:{product_id}",
         "Sort": "SubmissionTime:desc",
         "Limit": limit,
@@ -188,7 +188,7 @@ with tab2:
     n = st.number_input(
         "How many reviews to analyze",
         min_value=1,
-        max_value=30,
+        max_value=100,
         value=15,
         key="sephora_limit"
     )
