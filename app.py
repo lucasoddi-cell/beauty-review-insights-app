@@ -93,44 +93,59 @@ def analyze_review(reviews_text):
     )
     return response.parsed_output
 
+tab1, tab2, tab3 = st.tabs([
+    "Paste Reviews",
+    "Bazaarvoice",
+    "Reddit",
+])
+
 #Execution Function
-if st.button("Analyze", type="primary"):
-    if not reviews_input.strip():
-        st.warning("Please paste a review to use BRIT.")
-    else:
-        with st.spinner("Analyzing..."):
-            result = analyze_review(reviews_input)
-        st.success("Analysis Successfully Completed.")
-        st.caption("BRIT Analysis:")
-        
-        # === The headline metrics ===
-        st.subheader("At a glance")
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Inferred rating", f"{result.star_rating_inferred}/5")
-        col2.metric("Sentiment", result.sentiment)
-        col3.metric("Would repurchase?", result.would_repurchase)
-        
-        # === The quotable line (its own moment) ===
-        st.subheader("Most quotable line")
-        st.write(f'> "{result.most_quotable_line}"')
-        
-        # === Pain points and delight points side by side ===
-        col_left, col_right = st.columns(2)
-        with col_left:
-            st.subheader("Pain points")
-            if result.pain_points:
-                for p in result.pain_points:
-                    st.write(f"- {p}")
-            else:
-                st.caption("None mentioned.")
-        with col_right:
-            st.subheader("Delight points")
-            if result.delight_points:
-                for d in result.delight_points:
-                    st.write(f"- {d}")
-            else:
-                st.caption("None mentioned.")
-        
-        # === The full debug view (collapsed by default) ===
-        with st.expander("See full structured output"):
-            st.json(result.model_dump())
+with tab1:
+    if st.button("Analyze", type="primary"):
+        if not reviews_input.strip():
+            st.warning("Please paste a review to use BRIT.")
+        else:
+            with st.spinner("Analyzing..."):
+                result = analyze_review(reviews_input)
+            st.success("Analysis Successfully Completed.")
+            st.caption("BRIT Analysis:")
+            
+            # === The headline metrics ===
+            st.subheader("At a glance")
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Inferred rating", f"{result.star_rating_inferred}/5")
+            col2.metric("Sentiment", result.sentiment)
+            col3.metric("Would repurchase?", result.would_repurchase)
+            
+            # === The quotable line (its own moment) ===
+            st.subheader("Most quotable line")
+            st.write(f'> "{result.most_quotable_line}"')
+            
+            # === Pain points and delight points side by side ===
+            col_left, col_right = st.columns(2)
+            with col_left:
+                st.subheader("Pain points")
+                if result.pain_points:
+                    for p in result.pain_points:
+                        st.write(f"- {p}")
+                else:
+                    st.caption("None mentioned.")
+            with col_right:
+                st.subheader("Delight points")
+                if result.delight_points:
+                    for d in result.delight_points:
+                        st.write(f"- {d}")
+                else:
+                    st.caption("None mentioned.")
+            
+            # === The full debug view (collapsed by default) ===
+            with st.expander("See full structured output"):
+                st.json(result.model_dump())
+
+
+with tab2:
+     st.caption("Bazaarvoice Analysis:")
+
+with tab3:
+     st.caption("Reddit Analysis:")
+    st.info("Reddit integration awaits Reddit API approval.")
