@@ -21,7 +21,7 @@ def ask_claude(prompt, system="You are a helpful assistant."):
 #UI
 st.title("Welcome to BRIT - Beauty Review Insights Tool")
 st.caption("Structured analysis of beauty product reviews from any source.")
-st.caption("Built by Lukipuki · Week 2 of AI fluency plan")
+st.caption("Built by Lukipuki · AI fluency plan")
 
 # ============================================================
 # Schemas
@@ -350,8 +350,8 @@ with tab2:
     n = st.number_input(
         "How many reviews to analyze",
         min_value=1,
-        max_value=30,
-        value=15,
+        max_value=200,
+        #value=15,
         key="sephora_limit"
     )
     
