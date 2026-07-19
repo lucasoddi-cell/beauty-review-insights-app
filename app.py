@@ -21,7 +21,7 @@ def ask_claude(prompt, system="You are a helpful assistant."):
 #UI
 st.title("Welcome to BRIT - Beauty Review Insights Tool")
 st.caption("Structured analysis of beauty product reviews from any source.")
-st.caption("Built by Lukipuki · AI fluency plan")
+st.caption("Built by Lukipuki · Week 2 of AI fluency plan")
 
 # ============================================================
 # Schemas
@@ -142,7 +142,6 @@ def summarize_product_reviews(analyses: list[FullReviewAnalysis]) -> ProductSumm
     Uses the already-extracted pain_points and delight_points as input rather than
     re-reading raw reviews. Cheaper, and closes the loop on the earlier analysis.
     """
-    # Build a compact digest of what each review said
     digest_lines = []
     for i, a in enumerate(analyses, 1):
         line = (
@@ -186,10 +185,25 @@ def summarize_product_reviews(analyses: list[FullReviewAnalysis]) -> ProductSumm
 # Data fetchers
 # ============================================================
 
-def get_bazaarvoice_reviews(product_id: str, limit: int = 20) -> list[str]:
-    """Fetch reviews from Sephora's Bazaarvoice endpoint.
+def is_incentivized(raw_review: dict) -> bool:
+    """Check if a Bazaarvoice review was incentivized (e.g. Sephora sample program).
+    
+    Uses defensive dict access — some older reviews are missing the field entirely.
+    Returns False if the field can't be found (safer to include than exclude).
+    """
+    try:
+        value = raw_review["ContextDataValues"]["IncentivizedReview"]["Value"]
+        return value is True or (isinstance(value, str) and value.lower() == "true")
+    except (KeyError, TypeError):
+        return False
 
-    Returns a list of review body text strings. Empty list on any failure.
+
+def get_bazaarvoice_reviews(product_id: str, limit: int = 20) -> tuple[list[str], int]:
+    """Fetch reviews from Sephora's Bazaarvoice endpoint, excluding incentivized ones.
+
+    Returns:
+        A tuple of (list of review body text strings, count of excluded incentivized reviews).
+        Both empty/zero on any failure.
     """
     base_url = "https://api.bazaarvoice.com/data/reviews.json"
     params = {
@@ -204,18 +218,23 @@ def get_bazaarvoice_reviews(product_id: str, limit: int = 20) -> list[str]:
         response = requests.get(base_url, params=params, timeout=10)
         if response.status_code != 200:
             print(f"Bazaarvoice returned {response.status_code}")
-            return []
+            return [], 0
         data = response.json()
     except Exception as e:
         print(f"Bazaarvoice request failed: {e}")
-        return []
+        return [], 0
 
-    reviews = [
-        r["ReviewText"]
-        for r in data.get("Results", [])
-        if r.get("ReviewText")
-    ]
-    return reviews
+    reviews = []
+    excluded_count = 0
+    for r in data.get("Results", []):
+        if not r.get("ReviewText"):
+            continue
+        if is_incentivized(r):
+            excluded_count += 1
+            continue
+        reviews.append(r["ReviewText"])
+
+    return reviews, excluded_count
 
 
 # ============================================================
@@ -253,7 +272,6 @@ def display_product_summary(summary: ProductSummary, analyses: list[FullReviewAn
     """Render the cross-review ProductSummary at the top of the tab."""
     n = len(analyses)
     
-    # === Headline metrics ===
     positive_count = sum(1 for a in analyses if a.sentiment == "positive")
     repurchase_count = sum(1 for a in analyses if a.would_repurchase == "yes")
     avg_rating = sum(a.star_rating_inferred for a in analyses) / n
@@ -265,13 +283,11 @@ def display_product_summary(summary: ProductSummary, analyses: list[FullReviewAn
     col3.metric("% Repurchase", f"{100 * repurchase_count / n:.0f}%")
     col4.metric("Avg rating", f"{avg_rating:.1f}/5")
     
-    # === Strategic takeaway + action ===
     st.markdown("**Strategic takeaway**")
     st.write(summary.strategic_takeaway)
     st.markdown("**Recommended action**")
     st.write(summary.recommended_action)
     
-    # === Themes side by side ===
     col_pain, col_delight = st.columns(2)
     
     with col_pain:
@@ -334,8 +350,8 @@ with tab2:
     n = st.number_input(
         "How many reviews to analyze",
         min_value=1,
-        max_value=100,
-        #value=15,
+        max_value=30,
+        value=15,
         key="sephora_limit"
     )
     
@@ -343,15 +359,23 @@ with tab2:
         if not product_id.strip():
             st.warning("Please enter a Sephora Product ID.")
         else:
-            # Step 1 — fetch
+            # Step 1 — fetch (returns tuple: reviews + excluded count)
             with st.spinner(f"Fetching {n} reviews from Bazaarvoice..."):
-                reviews = get_bazaarvoice_reviews(product_id.strip(), limit=n)
+                reviews, excluded = get_bazaarvoice_reviews(product_id.strip(), limit=n)
             
             if not reviews:
-                st.error("No reviews returned. Check the Product ID and try again.")
+                st.error("No organic reviews returned. Check the Product ID and try again.")
             else:
+                # Report exclusion transparently
+                if excluded > 0:
+                    st.info(
+                        f"Excluded {excluded} incentivized review{'s' if excluded != 1 else ''} "
+                        f"(Sephora sample program). Analyzing {len(reviews)} organic reviews..."
+                    )
+                else:
+                    st.success(f"Got {len(reviews)} organic reviews. Analyzing individually...")
+                
                 # Step 2 — analyze each review, collect results
-                st.success(f"Got {len(reviews)} reviews. Analyzing individually...")
                 progress = st.progress(0)
                 analyses = []
                 paired = []  # (review_text, analysis) pairs for the expander block below
