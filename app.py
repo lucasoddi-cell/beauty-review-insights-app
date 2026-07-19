@@ -23,7 +23,10 @@ st.title("Welcome to BRIT - Beauty Review Insights Tool")
 st.caption("Structured analysis of beauty product reviews from any source.")
 st.caption("Built by Lukipuki · Week 2 of AI fluency plan")
 
-#Pydantic Class
+# ============================================================
+# Schemas
+# ============================================================
+
 class FullReviewAnalysis(BaseModel):
     """Structured analysis of a single beauty product review."""
 
@@ -73,7 +76,52 @@ class FullReviewAnalysis(BaseModel):
         description="How confident you are in the sentiment signal analysis. High = unambiguous sentiment, clear opinions, consistent throughout. Medium = some ambiguity, contradictions, or sarcasm. Low = very short, self-contradictory, or sarcastic to the point you can't tell the actual opinion."
     )
 
-#Analysis Function
+
+class ThemeCluster(BaseModel):
+    """A single clustered theme across multiple reviews."""
+
+    theme_name: str = Field(
+        description="Short 3-6 word label for this cluster of related mentions. E.g. 'creases under eyes', 'long-lasting formula', 'strong chemical scent'."
+    )
+    mention_count: int = Field(
+        description="How many of the analyzed reviews touched on this theme.",
+        ge=1
+    )
+    top_quote: str = Field(
+        description="The single most representative verbatim mention from the reviews, under 25 words. Should feel like a quotable example of this theme."
+    )
+
+
+class ProductSummary(BaseModel):
+    """Cross-review executive summary for a single product."""
+
+    overall_sentiment: Literal["positive", "mostly_positive", "mixed", "mostly_negative", "negative"] = Field(
+        description="Cross-review sentiment. Not the average of numeric ratings — the qualitative gestalt."
+    )
+
+    pain_themes: list[ThemeCluster] = Field(
+        description="Top 3 clusters of pain points, ranked by mention_count descending. Cluster similar complaints together (e.g. 'creases' and 'settles into fine lines' are one theme). Max 3.",
+        max_length=3
+    )
+
+    delight_themes: list[ThemeCluster] = Field(
+        description="Top 3 clusters of delight points, ranked by mention_count descending. Cluster similar praise together. Max 3.",
+        max_length=3
+    )
+
+    strategic_takeaway: str = Field(
+        description="2-3 sentences: what does the pattern of feedback mean for the brand? Focus on tension between what customers love and what frustrates them. Not a rehash of the themes — the interpretation."
+    )
+
+    recommended_action: str = Field(
+        description="1-2 sentences: what should a marketing or product team DO based on this? Should be specific and actionable, not generic ('improve product'). Reference the actual themes."
+    )
+
+
+# ============================================================
+# Analysis functions
+# ============================================================
+
 def analyze_review(reviews_text):
     """Take a review string, return a FullReviewAnalysis object."""
     response = client.messages.parse(
@@ -87,21 +135,66 @@ def analyze_review(reviews_text):
     )
     return response.parsed_output
 
-# Bazaarvoice fetcher — used by Tab 2
-def get_bazaarvoice_reviews(product_id: str, limit: int = 100) -> list[str]:
+
+def summarize_product_reviews(analyses: list[FullReviewAnalysis]) -> ProductSummary:
+    """Take a list of per-review analyses, return an aggregated ProductSummary.
+    
+    Uses the already-extracted pain_points and delight_points as input rather than
+    re-reading raw reviews. Cheaper, and closes the loop on the earlier analysis.
+    """
+    # Build a compact digest of what each review said
+    digest_lines = []
+    for i, a in enumerate(analyses, 1):
+        line = (
+            f"Review {i}: sentiment={a.sentiment}, "
+            f"pain={a.pain_points}, "
+            f"delight={a.delight_points}, "
+            f"repurchase={a.would_repurchase}, "
+            f"quote=\"{a.most_quotable_line}\""
+        )
+        digest_lines.append(line)
+    digest = "\n".join(digest_lines)
+
+    response = client.messages.parse(
+        model="claude-haiku-4-5",
+        max_tokens=2500,
+        system=(
+            "You are a senior consumer insights analyst preparing a brief for a "
+            "prestige beauty brand's marketing team. You cluster mentions across "
+            "reviews into themes (not verbatim buckets — semantic ones), rank by "
+            "frequency, and translate patterns into strategic implications. Never "
+            "invent quotes; only use verbatim quotes present in the input."
+        ),
+        messages=[
+            {"role": "user", "content": (
+                f"Here are {len(analyses)} structured analyses of customer reviews "
+                f"for one product:\n\n{digest}\n\n"
+                "Produce a cross-review executive summary. Cluster similar pain points "
+                "into up to 3 themes; same for delight points. For each theme's top_quote, "
+                "pick the most representative verbatim line from the actual reviews above. "
+                "In strategic_takeaway, focus on the tension between what customers love "
+                "and what frustrates them. In recommended_action, be specific and reference "
+                "actual themes."
+            )}
+        ],
+        output_format=ProductSummary
+    )
+    return response.parsed_output
+
+
+# ============================================================
+# Data fetchers
+# ============================================================
+
+def get_bazaarvoice_reviews(product_id: str, limit: int = 20) -> list[str]:
     """Fetch reviews from Sephora's Bazaarvoice endpoint.
 
-    Args:
-        product_id: The Sephora product ID (e.g. "P443563").
-        limit: Maximum number of reviews to return. Default 20.
-
-    Returns:
-        A list of review body text strings. Empty list on any failure.
+    Returns a list of review body text strings. Empty list on any failure.
     """
     base_url = "https://api.bazaarvoice.com/data/reviews.json"
     params = {
         "apiversion": "5.5",
-        "passkey": "calXm2DyQVjcCy9agq85vmTJv5ELuuBCF2sdg4BnJzJus",  # <-- paste your passkey from the DevTools URL
+        "passkey": "YOUR_PASSKEY_HERE",  # <-- paste your passkey from the DevTools URL
         "Filter": f"ProductId:{product_id}",
         "Sort": "SubmissionTime:desc",
         "Limit": limit,
@@ -124,7 +217,11 @@ def get_bazaarvoice_reviews(product_id: str, limit: int = 100) -> list[str]:
     ]
     return reviews
 
-# Display helper — used by both tabs
+
+# ============================================================
+# Display helpers
+# ============================================================
+
 def display_analysis(result):
     """Render one FullReviewAnalysis result as metrics + quotable + pain/delight."""
     col1, col2, col3 = st.columns(3)
@@ -150,6 +247,55 @@ def display_analysis(result):
                 st.write(f"- {d}")
         else:
             st.caption("None mentioned.")
+
+
+def display_product_summary(summary: ProductSummary, analyses: list[FullReviewAnalysis]):
+    """Render the cross-review ProductSummary at the top of the tab."""
+    n = len(analyses)
+    
+    # === Headline metrics ===
+    positive_count = sum(1 for a in analyses if a.sentiment == "positive")
+    repurchase_count = sum(1 for a in analyses if a.would_repurchase == "yes")
+    avg_rating = sum(a.star_rating_inferred for a in analyses) / n
+    
+    st.subheader(f"Product Summary — {n} reviews analyzed")
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Overall", summary.overall_sentiment.replace("_", " "))
+    col2.metric("% Positive", f"{100 * positive_count / n:.0f}%")
+    col3.metric("% Repurchase", f"{100 * repurchase_count / n:.0f}%")
+    col4.metric("Avg rating", f"{avg_rating:.1f}/5")
+    
+    # === Strategic takeaway + action ===
+    st.markdown("**Strategic takeaway**")
+    st.write(summary.strategic_takeaway)
+    st.markdown("**Recommended action**")
+    st.write(summary.recommended_action)
+    
+    # === Themes side by side ===
+    col_pain, col_delight = st.columns(2)
+    
+    with col_pain:
+        st.markdown("**Top pain themes**")
+        if summary.pain_themes:
+            for i, theme in enumerate(summary.pain_themes, 1):
+                st.write(f"**{i}. {theme.theme_name}** ({theme.mention_count} mentions)")
+                st.caption(f'"{theme.top_quote}"')
+        else:
+            st.caption("No pain themes surfaced.")
+    
+    with col_delight:
+        st.markdown("**Top delight themes**")
+        if summary.delight_themes:
+            for i, theme in enumerate(summary.delight_themes, 1):
+                st.write(f"**{i}. {theme.theme_name}** ({theme.mention_count} mentions)")
+                st.caption(f'"{theme.top_quote}"')
+        else:
+            st.caption("No delight themes surfaced.")
+
+
+# ============================================================
+# Tabs
+# ============================================================
 
 tab1, tab2, tab3 = st.tabs([
     "Paste Reviews",
@@ -188,7 +334,7 @@ with tab2:
     n = st.number_input(
         "How many reviews to analyze",
         min_value=1,
-        max_value=100,
+        max_value=30,
         value=15,
         key="sephora_limit"
     )
@@ -197,30 +343,50 @@ with tab2:
         if not product_id.strip():
             st.warning("Please enter a Sephora Product ID.")
         else:
+            # Step 1 — fetch
             with st.spinner(f"Fetching {n} reviews from Bazaarvoice..."):
                 reviews = get_bazaarvoice_reviews(product_id.strip(), limit=n)
             
             if not reviews:
                 st.error("No reviews returned. Check the Product ID and try again.")
             else:
-                st.success(f"Got {len(reviews)} reviews. Analyzing...")
+                # Step 2 — analyze each review, collect results
+                st.success(f"Got {len(reviews)} reviews. Analyzing individually...")
                 progress = st.progress(0)
+                analyses = []
+                paired = []  # (review_text, analysis) pairs for the expander block below
                 
                 for i, review in enumerate(reviews, 1):
                     try:
                         result = analyze_review(review)
-                        header = f"Review {i} — {result.sentiment} ({result.star_rating_inferred}/5)"
-                        with st.expander(header):
-                            st.caption(review[:250] + "..." if len(review) > 250 else review)
-                            display_analysis(result)
+                        analyses.append(result)
+                        paired.append((review, result))
                     except Exception as e:
                         st.error(f"Review {i} failed: {e}")
                     progress.progress(i / len(reviews))
                 
-                st.success(f"Done — analyzed {len(reviews)} reviews.")
+                if not analyses:
+                    st.error("Every review analysis failed. Nothing to summarize.")
+                else:
+                    # Step 3 — cross-review summary
+                    with st.spinner("Generating executive summary..."):
+                        try:
+                            summary = summarize_product_reviews(analyses)
+                            display_product_summary(summary, analyses)
+                        except Exception as e:
+                            st.error(f"Summary generation failed: {e}")
+                    
+                    # Step 4 — individual reviews nested in one expander
+                    st.divider()
+                    with st.expander(f"See all {len(paired)} individual review analyses"):
+                        for i, (review_text, result) in enumerate(paired, 1):
+                            st.markdown(f"**Review {i} — {result.sentiment} ({result.star_rating_inferred}/5)**")
+                            st.caption(review_text[:250] + "..." if len(review_text) > 250 else review_text)
+                            display_analysis(result)
+                            if i < len(paired):
+                                st.divider()
 
 # ===== Tab 3: Reddit (pending approval) =====
 with tab3:
     st.caption("Reddit Analysis:")
-    st.info("Reddit integration awaits Reddit API approval.")       
- 
+    st.info("Reddit integration awaits Reddit API approval.")
