@@ -137,11 +137,7 @@ def analyze_review(reviews_text):
 
 
 def summarize_product_reviews(analyses: list[FullReviewAnalysis]) -> ProductSummary:
-    """Take a list of per-review analyses, return an aggregated ProductSummary.
-    
-    Uses the already-extracted pain_points and delight_points as input rather than
-    re-reading raw reviews. Cheaper, and closes the loop on the earlier analysis.
-    """
+    """Take a list of per-review analyses, return an aggregated ProductSummary."""
     digest_lines = []
     for i, a in enumerate(analyses, 1):
         line = (
@@ -149,6 +145,7 @@ def summarize_product_reviews(analyses: list[FullReviewAnalysis]) -> ProductSumm
             f"pain={a.pain_points}, "
             f"delight={a.delight_points}, "
             f"repurchase={a.would_repurchase}, "
+            f"price={a.price_sensitivity}, "
             f"quote=\"{a.most_quotable_line}\""
         )
         digest_lines.append(line)
@@ -186,11 +183,7 @@ def summarize_product_reviews(analyses: list[FullReviewAnalysis]) -> ProductSumm
 # ============================================================
 
 def is_incentivized(raw_review: dict) -> bool:
-    """Check if a Bazaarvoice review was incentivized (e.g. Sephora sample program).
-    
-    Uses defensive dict access — some older reviews are missing the field entirely.
-    Returns False if the field can't be found (safer to include than exclude).
-    """
+    """Check if a Bazaarvoice review was incentivized (e.g. Sephora sample program)."""
     try:
         value = raw_review["ContextDataValues"]["IncentivizedReview"]["Value"]
         return value is True or (isinstance(value, str) and value.lower() == "true")
@@ -201,14 +194,14 @@ def is_incentivized(raw_review: dict) -> bool:
 def get_bazaarvoice_reviews(product_id: str, limit: int = 20) -> tuple[list[str], int]:
     """Fetch reviews from Sephora's Bazaarvoice endpoint, excluding incentivized ones.
 
-    Returns:
-        A tuple of (list of review body text strings, count of excluded incentivized reviews).
-        Both empty/zero on any failure.
+    Returns a tuple of (list of review body text strings, count of excluded incentivized reviews).
     """
+    # NOTE: Bazaarvoice passkey is Sephora's public client-side key (shipped to every browser).
+    # Safe to commit. If BRIT ever adds a non-public key, move it to st.secrets.
     base_url = "https://api.bazaarvoice.com/data/reviews.json"
     params = {
         "apiversion": "5.5",
-        "passkey": "calXm2DyQVjcCy9agq85vmTJv5ELuuBCF2sdg4BnJzJus",  # <-- paste your passkey from the DevTools URL
+        "passkey": "calXm2DyQVjcCy9agq85vmTJv5ELuuBCF2sdg4BnJzJus",
         "Filter": f"ProductId:{product_id}",
         "Sort": "SubmissionTime:desc",
         "Limit": limit,
@@ -274,15 +267,24 @@ def display_product_summary(summary: ProductSummary, analyses: list[FullReviewAn
     
     positive_count = sum(1 for a in analyses if a.sentiment == "positive")
     repurchase_count = sum(1 for a in analyses if a.would_repurchase == "yes")
+    price_concern_count = sum(1 for a in analyses if a.price_sensitivity == "concern")
     avg_rating = sum(a.star_rating_inferred for a in analyses) / n
-
     
     st.subheader(f"Product Summary — {n} reviews analyzed")
+    
+    # Row 1 — headline sentiment/repurchase metrics
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Overall", summary.overall_sentiment.replace("_", " "))
     col2.metric("% Positive", f"{100 * positive_count / n:.0f}%")
     col3.metric("% Repurchase", f"{100 * repurchase_count / n:.0f}%")
     col4.metric("Avg rating", f"{avg_rating:.1f}/5")
+    
+    # Row 2 — price signal (its own row so it reads as a separate signal)
+    st.metric(
+        "% raising price concerns",
+        f"{100 * price_concern_count / n:.0f}%",
+        help=f"{price_concern_count} of {n} reviewers explicitly framed price as a negative."
+    )
     
     st.markdown("**Strategic takeaway**")
     st.write(summary.strategic_takeaway)
@@ -351,8 +353,8 @@ with tab2:
     n = st.number_input(
         "How many reviews to analyze",
         min_value=1,
-        max_value=200,
-        #value=15,
+        max_value=50,
+        value=15,
         key="sephora_limit"
     )
     
@@ -360,14 +362,12 @@ with tab2:
         if not product_id.strip():
             st.warning("Please enter a Sephora Product ID.")
         else:
-            # Step 1 — fetch (returns tuple: reviews + excluded count)
             with st.spinner(f"Fetching {n} reviews from Bazaarvoice..."):
                 reviews, excluded = get_bazaarvoice_reviews(product_id.strip(), limit=n)
             
             if not reviews:
                 st.error("No organic reviews returned. Check the Product ID and try again.")
             else:
-                # Report exclusion transparently
                 if excluded > 0:
                     st.info(
                         f"Excluded {excluded} incentivized review{'s' if excluded != 1 else ''} "
@@ -376,10 +376,9 @@ with tab2:
                 else:
                     st.success(f"Got {len(reviews)} organic reviews. Analyzing individually...")
                 
-                # Step 2 — analyze each review, collect results
                 progress = st.progress(0)
                 analyses = []
-                paired = []  # (review_text, analysis) pairs for the expander block below
+                paired = []
                 
                 for i, review in enumerate(reviews, 1):
                     try:
@@ -393,7 +392,6 @@ with tab2:
                 if not analyses:
                     st.error("Every review analysis failed. Nothing to summarize.")
                 else:
-                    # Step 3 — cross-review summary
                     with st.spinner("Generating executive summary..."):
                         try:
                             summary = summarize_product_reviews(analyses)
@@ -401,7 +399,6 @@ with tab2:
                         except Exception as e:
                             st.error(f"Summary generation failed: {e}")
                     
-                    # Step 4 — individual reviews nested in one expander
                     st.divider()
                     with st.expander(f"See all {len(paired)} individual review analyses"):
                         for i, (review_text, result) in enumerate(paired, 1):
@@ -410,8 +407,6 @@ with tab2:
                             display_analysis(result)
                             if i < len(paired):
                                 st.divider()
-        price_concerned = len(df[df['price_sensitivity'] == 'concern'])
-        print(f"Reviews where price is a concern: {price_concerned} / {len(df)}")
 
 # ===== Tab 3: Reddit (pending approval) =====
 with tab3:
