@@ -276,7 +276,6 @@ def display_product_summary(summary: ProductSummary, analyses: list[FullReviewAn
     repurchase_count = sum(1 for a in analyses if a.would_repurchase == "yes")
     avg_rating = sum(a.star_rating_inferred for a in analyses) / n
 
-    price_concerned = len(df[df['price_sensitivity'] == 'concern'])
     
     st.subheader(f"Product Summary — {n} reviews analyzed")
     col1, col2, col3, col4 = st.columns(4)
@@ -411,7 +410,7 @@ with tab2:
                             display_analysis(result)
                             if i < len(paired):
                                 st.divider()
-
+        price_concerned = len(df[df['price_sensitivity'] == 'concern'])
         print(f"Reviews where price is a concern: {price_concerned} / {len(df)}")
 
 # ===== Tab 3: Reddit (pending approval) =====
