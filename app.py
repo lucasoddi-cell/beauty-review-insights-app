@@ -353,7 +353,7 @@ with tab2:
     n = st.number_input(
         "How many reviews to analyze",
         min_value=1,
-        max_value=50,
+        max_value=200,
         value=15,
         key="sephora_limit"
     )
@@ -403,7 +403,7 @@ with tab2:
                     with st.expander(f"See all {len(paired)} individual review analyses"):
                         for i, (review_text, result) in enumerate(paired, 1):
                             st.markdown(f"**Review {i} — {result.sentiment} ({result.star_rating_inferred}/5)**")
-                            st.caption(review_text[:250] + "..." if len(review_text) > 250 else review_text)
+                            st.caption(review_text)
                             display_analysis(result)
                             if i < len(paired):
                                 st.divider()
